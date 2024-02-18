@@ -22,6 +22,7 @@ object AppModule {
     fun provideFireRepository() = FireRepository(
         queryBook = FirebaseFirestore.getInstance()
         .collection("books"))
+
     @Singleton
     @Provides
     fun provideBookRepository(api: BooksApi) = BooksRepository(api)

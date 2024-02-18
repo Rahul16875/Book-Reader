@@ -13,6 +13,7 @@ class FireRepository @Inject constructor(
 ) {
     suspend fun getAllBooksFromDatabase(): DataOrException<List<MBook>, Boolean, Exception>{
         val dataOrException = DataOrException<List<MBook>,Boolean,Exception>()
+
         try {
             dataOrException.loading = true
             dataOrException.data = queryBook.get().await().documents.map {
