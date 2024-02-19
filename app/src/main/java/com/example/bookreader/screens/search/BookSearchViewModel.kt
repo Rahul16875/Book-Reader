@@ -24,7 +24,7 @@ class BookSearchViewModel @Inject constructor(private val repository: BookReposi
     }
 
     private fun loadBooks() {
-        searchBooks("sex")
+        searchBooks("sports")
     }
 
     fun searchBooks(query: String) {
