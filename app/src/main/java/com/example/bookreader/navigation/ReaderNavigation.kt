@@ -33,7 +33,8 @@ fun ReaderNavigation() {
             ReaderHomeScreen(navController = navController,viewModel = homeViewModel)
         }
         composable(ReaderScreens.ReaderStatsScreen.name){
-            StatsScreen(navController = navController)
+            val homeViewModel = hiltViewModel<HomeScreenViewModel>()
+            StatsScreen(navController = navController, viewModel = homeViewModel)
         }
         composable(ReaderScreens.SearchScreen.name){
             val searchViewModel = hiltViewModel<BookSearchViewModel>()

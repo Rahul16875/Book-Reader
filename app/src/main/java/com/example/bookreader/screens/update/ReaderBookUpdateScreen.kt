@@ -1,5 +1,8 @@
 package com.example.bookreader.screens.update
 
+import android.content.Context
+import android.util.Log
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -17,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CardElevation
@@ -27,6 +31,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -37,18 +42,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import coil.compose.rememberImagePainter
+import com.example.bookreader.R
 import com.example.bookreader.components.InputField
+import com.example.bookreader.components.RatingBar
 import com.example.bookreader.components.ReaderAppBar
+import com.example.bookreader.components.RoundedButton
 import com.example.bookreader.data.DataOrException
 import com.example.bookreader.model.MBook
+import com.example.bookreader.navigation.ReaderScreens
 import com.example.bookreader.screens.home.HomeScreenViewModel
+import com.example.bookreader.utills.formatDate
+import com.google.firebase.Timestamp
+import com.google.firebase.firestore.FirebaseFirestore
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -108,65 +122,182 @@ fun UpdateScreen(
         }
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun ShowSimpleForm(book: MBook, navController: NavController) {
+fun ShowSimpleForm(book: MBook,
+                   navController: NavController) {
 
-    val notesText = remember {
+    val context= LocalContext.current
+
+    val notesText= remember {
         mutableStateOf("")
     }
-
-    SimpleForm(defaultValue = if (book.notes.toString().isNotEmpty()) book.notes.toString()
-                else "No thoughts available."){
-        notesText.value = it
-    }
-
-    val isStartedReading = remember {
+    val isStartedReading= remember {
         mutableStateOf(false)
     }
-
-    val isFinishedReading = remember {
+    val isFinishedReading= remember {
         mutableStateOf(false)
     }
+    val ratingVal=remember{
+        mutableStateOf(0)
+    }
 
-    Row(modifier = Modifier.padding(4.dp),
+    SimpleForm(defaultValue = if(book.notes.toString().isNotEmpty()) book.notes.toString()
+    else "No thoughts Available"){note->
+        notesText.value=note
+    }
+
+
+    Row(modifier= Modifier.padding(4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Start) {
-
-        TextButton(onClick = { isStartedReading.value = true },
-            enabled = book.startedReading == null) {
-
-            if (book.startedReading == null) {
+        horizontalArrangement = Arrangement.Start){
+        TextButton(onClick = {isStartedReading.value = true }, enabled = book.startedReading==null) {
+            if(book.startedReading==null){
                 if (!isStartedReading.value) {
-                    Text(text = "Start Reading")
-                } else {
-                    Text(
-                        text = "Started Reading",
-                        modifier = Modifier.alpha(0.6f),
-                        color = Color.Red.copy(alpha = 0.5f)
+                    Text("Start Reading")
+                }else{
+                    Text("Started Reading", modifier = Modifier,
+                        color= Color.Red.copy(alpha = 0.05f)
                     )
                 }
             }else{
-                Text(text = "Started on: ${book.startedReading}")
+                Text("Started on ${formatDate(book.startedReading!!)}")
             }
         }
-        Spacer(modifier = Modifier.height(4.dp))
-        TextButton(onClick = { isFinishedReading.value = true },
-            enabled = book.finishedReading == null) {
-
-            if (book.finishedReading == null){
-                if (!isFinishedReading.value){
-                    Text(text = "Mars as Read")
+        Spacer(modifier=Modifier.height(4.dp))
+        TextButton(onClick = { isFinishedReading.value=true},
+            enabled=book.finishedReading==null) {
+            if(book.finishedReading==null){
+                if(!isFinishedReading.value==null){
+                    Text("Mark as Read")
                 }else{
-                    Text(text = "Finished Reading!")
+                    Text("Finished Reading")
                 }
             }else{
-                Text(text = "Finished on: ${book.finishedReading}")
+                Text("Finished on ${
+                    formatDate(book.finishedReading!!)}")
             }
+
+        }
+
+    }
+
+    Text(text = "Rating", modifier= Modifier.padding(bottom=3.dp))
+    book.rating?.toInt().let{
+        RatingBar(rating = it!! ){rating->
+            ratingVal.value=rating
         }
     }
 
+    Spacer(modifier=Modifier.padding(bottom = 15.dp))
+    Row(){
+
+        val changedNotes=book.notes!=notesText.value
+        val changedRating=book.rating?.toInt() !=ratingVal.value
+        val isFinishedTimeStamp=if(isFinishedReading.value) Timestamp.now() else{
+            book.finishedReading
+        }
+
+        val isStartedTimeStamp=if(isStartedReading.value) Timestamp.now()else{
+            book.startedReading
+        }
+        val bookUpdate=changedNotes||changedRating ||isFinishedReading.value || isStartedReading.value
+
+        val bookToUpdate= hashMapOf(
+            "finished_reading_at" to isFinishedTimeStamp,
+            "started_reading_at" to isStartedTimeStamp,
+            "rating" to ratingVal.value,
+            "notes" to notesText.value).toMap()
+
+        RoundedButton (label="Update"){
+            if(bookUpdate){
+                FirebaseFirestore.getInstance()
+                    .collection("books")
+                    .document(book.id!!)
+                    .update(bookToUpdate)
+                    .addOnCompleteListener{task->
+                        showToast(context, "Book Updated Successfully")
+                        navController.navigate(ReaderScreens.ReaderHomeScreen.name)
+
+                        Log.d("Success", "ShowSimpleForm: ${task.result.toString()}")
+
+
+                    }.addOnFailureListener{
+                        Log.w("Error", "Error updating Document", it)
+                    }
+            }
+        }
+
+        Spacer(Modifier.width(100.dp))
+
+        val openDialog= remember {
+            mutableStateOf(false)
+        }
+        if(openDialog.value){
+            ShowAlertDialog(message = stringResource(id = R.string.sure) + "\n" +
+                    stringResource(id = R.string.action ), openDialog){
+                FirebaseFirestore.getInstance()
+                    .collection("books")
+                    .document(book.id!!)
+                    .delete()
+                    .addOnCompleteListener{
+                        if(it.isSuccessful){
+                            openDialog.value=false
+
+                            navController.navigate(ReaderScreens.ReaderHomeScreen.name)
+                        }
+                    }
+            }
+        }
+        RoundedButton (label="Delete"){
+            openDialog.value=true
+        }
+    }
 }
 
+fun showToast(context: Context, msg: String) {
+    Toast.makeText(context, msg, Toast.LENGTH_LONG )
+        .show()
+}
+
+@Composable
+fun ShowAlertDialog(
+    message: String,
+    openDialog: MutableState<Boolean>,
+    onYesPressed: () -> Unit) {
+
+    if (openDialog.value) {
+        AlertDialog(
+            title = {
+                Text(text ="Delete Book")
+            },
+            text = {
+                Text(text = message)
+            },
+            onDismissRequest = {
+                openDialog.value = false
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onYesPressed.invoke()
+                    }
+                ) {
+                    Text("Confirm")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        openDialog.value = false
+                    }
+                ) {
+                    Text("Dismiss")
+                }
+            }
+        )
+    }
+}
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun SimpleForm(modifier: Modifier = Modifier,

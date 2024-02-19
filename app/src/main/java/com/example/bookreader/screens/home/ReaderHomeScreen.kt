@@ -63,6 +63,4 @@ fun ReadingRightNowArea(listOfBooks: List<MBook>,
         navController.navigate(ReaderScreens.UpdateScreen.name + "/$it")
     }
 
-
-
 }
